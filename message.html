@@ -18,6 +18,8 @@
     font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background: linear-gradient(160deg,var(--bg),#071023 60%);
     color: var(--white);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
   }
 
   .wrapper {
@@ -27,7 +29,7 @@
     overflow: hidden;
   }
 
-  /* ---------- LEFT MESSAGE ---------- */
+  /* ---------- LEFT MESSAGE (desktop) ---------- */
   .message {
     width: 30%;
     padding: 40px;
@@ -42,19 +44,20 @@
 
   .message h1 {
     font-size: clamp(24px, 3.5vw, 38px);
-    margin-bottom: 16px;
+    margin: 0 0 16px;
     color: #fff;
     text-shadow: 0 2px 8px rgba(0,0,0,0.7);
   }
 
   .message p {
+    margin: 0;
     font-size: clamp(14px, 1.6vw, 18px);
     color: #f1f1f1;
     line-height: 1.6;
     white-space: pre-line;
   }
 
-  /* ---------- RIGHT SLIDESHOW ---------- */
+  /* ---------- RIGHT SLIDESHOW (desktop) ---------- */
   .slideshow {
     position: relative;
     width: 70%;
@@ -69,54 +72,46 @@
     background-size: cover;
     background-position: center;
     opacity: 0;
-    transition: opacity 1.6s ease-in-out;
+    transition: opacity 1.2s ease-in-out;
   }
 
   .slide.show {
     opacity: 1;
   }
 
-  audio {
-    display: none;
-  }
+  audio { display: none; }
 
-  /* ---------- MOBILE RESPONSIVE FIX ---------- */
+  /* ---------- MOBILE: stack, keep slideshow visible ---------- */
   @media (max-width: 800px) {
-    html, body {
-      height: auto;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-
     .wrapper {
       flex-direction: column;
-      height: auto;
+      height: 100%;
       min-height: 100vh;
+      overflow: auto;
     }
 
     .message {
       width: 100%;
+      /* allow message to scroll internally but limit its height so images show */
+      max-height: 55vh; /* important: message will not exceed this on mobile */
+      overflow-y: auto;
       box-shadow: none;
-      padding: 25px 20px;
+      padding: 20px;
       text-align: center;
-      background: rgba(255,255,255,0.08);
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border-bottom: 1px solid rgba(255,255,255,0.04);
     }
 
-    .message h1 {
-      font-size: 26px;
-      margin-bottom: 12px;
-    }
+    .message::-webkit-scrollbar { height: 6px; width: 6px; }
+    .message::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
 
-    .message p {
-      font-size: 16px;
-    }
+    .message h1 { font-size: 26px; margin-bottom: 10px; }
+    .message p { font-size: 16px; }
 
     .slideshow {
       width: 100%;
-      height: 60vh;
-      position: relative;
-      background: #0f1724;
+      height: 42vh; /* visible area for images immediately after message */
+      min-height: 260px;
     }
 
     .slide {
@@ -128,11 +123,10 @@
   }
 </style>
 </head>
-
 <body>
 
-<div class="wrapper">
-  <div class="message">
+<div class="wrapper" id="wrapper">
+  <div class="message" id="message">
     <h1>Hey, take a deep breath 🌤️</h1>
     <p>
 Hey Baccha,  
@@ -153,7 +147,7 @@ Your PB 🐻‍❄️
     </p>
   </div>
 
-  <div class="slideshow" id="slideshow"></div>
+  <div class="slideshow" id="slideshow" aria-hidden="false"></div>
 </div>
 
 <audio id="bgAudio" autoplay loop>
@@ -161,40 +155,66 @@ Your PB 🐻‍❄️
 </audio>
 
 <script>
+/* === Images: update these filenames to match your repo exactly === */
 const images = [
-  'photo1.jpg','photo2.jpg','photo3.jpg','photo4.jpg','photo5.jpg',
-  'photo6.jpg','photo7.jpg','photo8.jpg','photo9.jpg','photo10.jpg'
+  'photo1.jpg','photo2.jpg','photo3.jpg','photo4.jpg','photo5.jpg'
 ];
 
+/* build slides */
 const slideshow = document.getElementById('slideshow');
-let index = 0;
-
-// Create slides dynamically
 images.forEach((img, i) => {
   const div = document.createElement('div');
   div.className = 'slide';
-  div.style.backgroundImage = `url('${img}')`;
-  if (i === 0) div.classList.add('show');
+  div.style.backgroundImage = `url("${img}")`;
+  if(i === 0) div.classList.add('show');
   slideshow.appendChild(div);
 });
+const slides = slideshow.querySelectorAll('.slide');
 
-const slides = document.querySelectorAll('.slide');
+let idx = 0;
+const CHANGE_MS = 4000;
+let changeTimer = setInterval(nextSlide, CHANGE_MS);
 
-// Change image every 4 seconds
-setInterval(() => {
-  slides[index].classList.remove('show');
-  index = (index + 1) % slides.length;
-  slides[index].classList.add('show');
-}, 4000);
+function nextSlide() {
+  slides[idx].classList.remove('show');
+  idx = (idx + 1) % slides.length;
+  slides[idx].classList.add('show');
+}
 
-// Smooth fade-in for music
+/* fade-in audio gently (user gesture may be required on mobile) */
 const audio = document.getElementById('bgAudio');
 audio.volume = 0;
-const fadeIn = setInterval(() => {
-  if (audio.volume < 1) audio.volume += 0.02;
-  else clearInterval(fadeIn);
-}, 100);
-</script>
+function gentleFadeIn() {
+  let v = 0;
+  const t = setInterval(()=> {
+    v = Math.min(1, v + 0.03);
+    audio.volume = v;
+    if (v >= 1) clearInterval(t);
+  }, 100);
+}
 
+/* try to auto-play on load, but ensure fade-in happens on user interaction too */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // try an immediate attempt (may be blocked)
+  audio.play().then(()=>{
+    gentleFadeIn();
+  }).catch(()=> {
+    // not allowed — wait for first touch/click
+  });
+});
+
+// on first tap/click anywhere, ensure audio and fade-in start
+function setupFirstInteraction() {
+  document.removeEventListener('pointerdown', setupFirstInteraction);
+  audio.play().then(()=> gentleFadeIn()).catch(()=>{ /* ignore */ });
+}
+document.addEventListener('pointerdown', setupFirstInteraction, { once:true });
+
+/* accessibility: stop slideshow when user navigates away */
+document.addEventListener('visibilitychange', ()=> {
+  if(document.hidden) clearInterval(changeTimer);
+  else changeTimer = setInterval(nextSlide, CHANGE_MS);
+});
+</script>
 </body>
 </html>
